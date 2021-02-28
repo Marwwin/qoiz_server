@@ -13,10 +13,10 @@ mongoose.set("useUnifiedTopology", true);
 mongoose.connect(process.env.mongo);
 // Port for server
 const port = process.env.PORT || 3000;
+
 app.use(cors());
 
 // Normal server stuff routing etc.
-
 app.use(morgan("dev"));
 
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -29,6 +29,10 @@ app.use(
   })
 );
 
+////////////////
+// Routes //
+////////////////
+
 const questionRoutes = require("./routes/questions");
 const quizsRoutes = require("./routes/quizs");
 const usersRoutes = require("./routes/users");
@@ -37,12 +41,14 @@ app.use("/questions", questionRoutes);
 app.use("/quizs", quizsRoutes);
 app.use("/users", usersRoutes);
 
+// If invalid path
 app.use((req, res, next) => {
   const error = new Error("Requested resource not found");
   error.status = 404;
   next(error);
 });
 
+// Error messahe
 app.use((error, req, res, next) => {
   next;
   res.status(error.status || 500).json({
@@ -59,7 +65,9 @@ app.use((error, req, res, next) => {
 //  next();
 //});
 
+// Create server
 const server = require("http").createServer(app);
+// Options not in use atm
 const options = {
   cors: {
     origin: "http://localhost:8080",
@@ -69,6 +77,7 @@ const options = {
   transports: ['websocket', 'polling'],
 };
 
+// Create socket.io object
 const io = require("socket.io")(server, {});
 
 let gamesList = new Map();
@@ -83,7 +92,6 @@ let guid = () => {
       .toString(16)
       .substring(1);
   }
-  //return id of format 'aaaaaaaa'-'aaaa'-'aaaa'-'aaaa'-'aaaaaaaaaaaa'
   return s4() + '-' + s4() + '-' + s4() + '-' + s4();
 }
 
@@ -108,6 +116,7 @@ Game.prototype.nextRound = function (answer) {
 Game.prototype.getName = function () {
   return this.quiz.name
 }
+
 // THE PLAYER CLASS
 
 function Player(name, id, socket) {
@@ -134,14 +143,16 @@ io.on("connect", (socket) => {
 
   // When new player joins put him in the waiting-room and add a Player object to clientList
   socket.on("newplayer", (data) => {
-    console.log("new player")
+    console.log("new player");
     socket.join("waiting-room");
     clientList.push(new Player(data.name, data.id, socket));
     updateClientList();
   });
+  // Remove player for waitingroom
   socket.on("removeplayer", (data) => {
-    console.log("remove player")
+    console.log("remove player");
     socket.leave("waiting-room");
+    // Filter out the player from clientList
     clientList = clientList.filter((player) => player.socketID.toString() != socket.id.toString());
     updateClientList(socket.id);
   });
@@ -151,6 +162,7 @@ io.on("connect", (socket) => {
     console.log(request.game)
     const currentGame = gamesList.get(request.game);
     const questions = currentGame.quiz.quizQuestions;
+    // Get the current player 
     const currentPlayer = currentGame.players.filter(x => x.id == request.playerID)[0]
     console.log("Game: " + currentGame.id + " round " + currentGame.round)
     // If it is not the starting round store the players answer
@@ -164,7 +176,9 @@ io.on("connect", (socket) => {
       for (q in questions) {
         data.push(questions[q].question + ": " + currentPlayer.answers[q]);
       }
+      // Emit game over to the player
       io.to(currentPlayer.socketID).emit("gameOver", data);
+      // Send player answers, questions and stuff to admin
       io.to(currentGame.gameAdmin).emit("adminGameOver", {
         game: currentGame.id,
         questions: questions,
@@ -174,7 +188,7 @@ io.on("connect", (socket) => {
         answers: currentPlayer.answers
       });
     }
-    // If there are still answers left send the next one 
+    // If there are still answers left send the next one to player
     else {
       console.log("New Round!!")
       console.log(questions)
@@ -226,6 +240,7 @@ io.on("connect", (socket) => {
   });
 });
 // This updates how many players are online to the players and also list of all players to admins
+// TODO: Clean up this code!!!
 function updateClientList(sender) {
   const newList = clientList.map(p => {
     return {
